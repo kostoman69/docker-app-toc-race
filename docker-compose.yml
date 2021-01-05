@@ -1,0 +1,74 @@
+version: '3.8'
+services:
+   db:
+     image: mysql
+     # from Dockerfile documentation
+     # The main purpose of a CMD is to provide defaults for an executing container. These defaults can include an executable, 
+     # or they can omit the executable, in which case you must specify an ENTRYPOINT instruction as well.
+     # The CMD instruction has three forms:
+     # CMD ["executable","param1","param2"] (exec form, this is the preferred form)
+     # CMD ["param1","param2"] (as default parameters to ENTRYPOINT)
+     # CMD command param1 param2 (shell form)
+     #entrypoint: docker-entrypoint.sh 
+     command: --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+     restart: always
+     container_name: db
+     environment:
+       # Environment variable that causes mysql initialization script to read root password from mysql-root-passwd secret
+       MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql-root-passwd
+       #MYSQL_ROOT_PASSWORD: 123456
+     # We create a new network for the service to run. That way, we can use as network address the container-name
+     networks:
+       - net
+     ports:
+       - target: 3306
+         published: 3306
+     volumes:
+       - type: volume
+         source: toc_data
+         target: /var/lib/mysql
+     # Specifies the secret name. This grants the container access to the secret and mounts it as read-only to /run/secrets/<secret_name> 
+     # within the container. The source name and destination mountpoint are both set to the secret name.
+     secrets:
+       - mysql-root-passwd
+   adminer:
+    image: adminer
+    restart: always
+    container_name: adminer
+    ports:
+      - 8081:8080
+    networks:
+      - net
+   traccar:
+     image: traccar/traccar:4.11
+     container_name: traccar
+     restart: always
+     networks:
+       - net
+     ports:
+       - "8080:8082"
+       - "5000-5150:5000-5150"
+       - "5000-5150:5000-5150/udp"
+     volumes:
+       - type: bind
+         source: ./traccar.xml
+         target: /opt/traccar/conf/traccar.xml
+         read_only: true
+   ranking:
+     image: kostoman/toc-ranking
+     container_name: ranking
+     restart: always
+     networks:
+       - net
+     ports:
+       - "80:80"
+secrets:                        # top level secrets block
+  mysql-root-passwd:
+    file: mysql-root-passwd.txt
+
+volumes:
+  toc_data:
+    external: true
+
+networks:
+  net:
